@@ -1,7 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Plus, CalendarCheck } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import type { AppointmentDto, DoctorDto, PatientDto } from '../../api/types';
 import { useAuth } from '../../app/AuthContext';
+import { Badge } from '../../components/Badge';
+import { useToast } from '../../components/ToastProvider';
+import { useConfirm } from '../../components/ConfirmProvider';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -10,11 +14,12 @@ function todayIso() {
 export function AppointmentsPage() {
   const { hasRole } = useAuth();
   const canBook = hasRole('Administrator', 'Receptionist');
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [appointments, setAppointments] = useState<AppointmentDto[]>([]);
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [patients, setPatients] = useState<PatientDto[]>([]);
   const [doctors, setDoctors] = useState<DoctorDto[]>([]);
@@ -49,7 +54,6 @@ export function AppointmentsPage() {
 
   const startBooking = async () => {
     setShowForm(true);
-    setError(null);
     setPatientId('');
     setDoctorId('');
     setDate(todayIso());
@@ -77,7 +81,6 @@ export function AppointmentsPage() {
 
   const onBook = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
     try {
       await apiClient.post('/appointments', {
         patientId: Number(patientId),
@@ -86,10 +89,11 @@ export function AppointmentsPage() {
         startTime: selectedSlot,
         notes: notes || null,
       });
+      toast.success('Appointment booked.');
       setShowForm(false);
       await load(dateFilter || undefined);
     } catch {
-      setError('Failed to book appointment. The slot may have just been taken.');
+      toast.error('Failed to book appointment. The slot may have just been taken.');
     }
   };
 
@@ -111,23 +115,26 @@ export function AppointmentsPage() {
         date: rescheduleDate,
         startTime: rescheduleSlot,
       });
+      toast.success('Appointment rescheduled.');
       setRescheduling(null);
       await load(dateFilter || undefined);
     } catch {
-      setError('Failed to reschedule. The slot may have just been taken.');
+      toast.error('Failed to reschedule. The slot may have just been taken.');
     }
   };
 
   const onCancel = async (appt: AppointmentDto) => {
-    if (!confirm(`Cancel appointment for ${appt.patientName} with ${appt.doctorName}?`)) return;
+    if (
+      !(await confirm({
+        title: 'Cancel appointment',
+        message: `Cancel appointment for ${appt.patientName} with ${appt.doctorName}?`,
+        danger: true,
+      }))
+    )
+      return;
     await apiClient.put(`/appointments/${appt.id}/cancel`);
+    toast.success('Appointment cancelled.');
     await load(dateFilter || undefined);
-  };
-
-  const statusColor: Record<string, string> = {
-    Scheduled: 'text-blue-600',
-    Completed: 'text-green-600',
-    Cancelled: 'text-slate-400',
   };
 
   return (
@@ -137,8 +144,9 @@ export function AppointmentsPage() {
         {canBook && (
           <button
             onClick={() => void startBooking()}
-            className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
           >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
             Book Appointment
           </button>
         )}
@@ -151,18 +159,16 @@ export function AppointmentsPage() {
             type="date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           />
         </div>
-        <button type="submit" className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700">
+        <button type="submit" className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200">
           Apply
         </button>
       </form>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-
       {showForm && (
-        <form onSubmit={onBook} className="mb-6 max-w-md rounded border border-slate-200 bg-white p-4">
+        <form onSubmit={onBook} className="mb-6 max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Book Appointment</h2>
 
           <label className="mb-1 block text-sm font-medium text-slate-600">Patient</label>
@@ -170,7 +176,7 @@ export function AppointmentsPage() {
             required
             value={patientId}
             onChange={(e) => setPatientId(e.target.value)}
-            className="mb-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           >
             <option value="" disabled>
               Select…
@@ -190,7 +196,7 @@ export function AppointmentsPage() {
               setDoctorId(e.target.value);
               void fetchSlots(e.target.value, date);
             }}
-            className="mb-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           >
             <option value="" disabled>
               Select…
@@ -211,7 +217,7 @@ export function AppointmentsPage() {
               setDate(e.target.value);
               void fetchSlots(doctorId, e.target.value);
             }}
-            className="mb-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           />
 
           <label className="mb-1 block text-sm font-medium text-slate-600">Available Slots</label>
@@ -222,9 +228,9 @@ export function AppointmentsPage() {
                 type="button"
                 key={s}
                 onClick={() => setSelectedSlot(s)}
-                className={`rounded border px-2 py-1 text-xs ${
+                className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
                   selectedSlot === s
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-teal-600 bg-teal-600 text-white'
                     : 'border-slate-300 text-slate-600 hover:border-slate-500'
                 }`}
               >
@@ -237,21 +243,21 @@ export function AppointmentsPage() {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="mb-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           />
 
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={!selectedSlot}
-              className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
               Book
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -260,7 +266,7 @@ export function AppointmentsPage() {
       )}
 
       {rescheduling && (
-        <form onSubmit={onReschedule} className="mb-6 max-w-md rounded border border-slate-200 bg-white p-4">
+        <form onSubmit={onReschedule} className="mb-6 max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">
             Reschedule — {rescheduling.patientName} with {rescheduling.doctorName}
           </h2>
@@ -278,7 +284,7 @@ export function AppointmentsPage() {
               setRescheduleSlots(data);
               setRescheduleSlot('');
             }}
-            className="mb-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           />
 
           <label className="mb-1 block text-sm font-medium text-slate-600">Available Slots</label>
@@ -288,9 +294,9 @@ export function AppointmentsPage() {
                 type="button"
                 key={s}
                 onClick={() => setRescheduleSlot(s)}
-                className={`rounded border px-2 py-1 text-xs ${
+                className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
                   rescheduleSlot === s
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-teal-600 bg-teal-600 text-white'
                     : 'border-slate-300 text-slate-600 hover:border-slate-500'
                 }`}
               >
@@ -303,14 +309,14 @@ export function AppointmentsPage() {
             <button
               type="submit"
               disabled={!rescheduleSlot}
-              className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
               Save
             </button>
             <button
               type="button"
               onClick={() => setRescheduling(null)}
-              className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -320,9 +326,14 @@ export function AppointmentsPage() {
 
       {loading ? (
         <p className="text-sm text-slate-500">Loading…</p>
+      ) : appointments.length === 0 ? (
+        <div className="flex max-w-4xl flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center">
+          <CalendarCheck className="h-8 w-8 text-slate-300" strokeWidth={1.5} />
+          <p className="text-sm text-slate-500">No appointments found.</p>
+        </div>
       ) : (
-        <table className="w-full max-w-4xl border-collapse overflow-hidden rounded border border-slate-200 bg-white text-sm">
-          <thead className="bg-slate-100 text-left text-slate-600">
+        <table className="w-full max-w-4xl border-collapse overflow-hidden rounded-xl border border-slate-200 bg-white text-sm shadow-sm">
+          <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
               <th className="px-3 py-2">Patient</th>
               <th className="px-3 py-2">Doctor</th>
@@ -334,22 +345,24 @@ export function AppointmentsPage() {
           </thead>
           <tbody>
             {appointments.map((appt) => (
-              <tr key={appt.id} className="border-t border-slate-100">
+              <tr key={appt.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-3 py-2 font-medium text-slate-800">{appt.patientName}</td>
                 <td className="px-3 py-2 text-slate-500">{appt.doctorName}</td>
                 <td className="px-3 py-2 text-slate-500">{appt.date}</td>
                 <td className="px-3 py-2 text-slate-500">
                   {appt.startTime.slice(0, 5)}–{appt.endTime.slice(0, 5)}
                 </td>
-                <td className={`px-3 py-2 font-medium ${statusColor[appt.status]}`}>{appt.status}</td>
+                <td className="px-3 py-2">
+                  <Badge status={appt.status} />
+                </td>
                 {canBook && (
                   <td className="px-3 py-2 text-right">
                     {appt.status === 'Scheduled' && (
                       <>
-                        <button onClick={() => void startReschedule(appt)} className="mr-3 text-slate-600 hover:underline">
+                        <button onClick={() => void startReschedule(appt)} className="mr-3 text-teal-600 hover:text-teal-700 hover:underline">
                           Reschedule
                         </button>
-                        <button onClick={() => void onCancel(appt)} className="text-red-600 hover:underline">
+                        <button onClick={() => void onCancel(appt)} className="text-rose-600 hover:text-rose-700 hover:underline">
                           Cancel
                         </button>
                       </>

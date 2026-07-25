@@ -1,13 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Plus, Receipt } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import type { InvoiceDto, PatientDto } from '../../api/types';
 import { useAuth } from '../../app/AuthContext';
-
-const statusColor: Record<string, string> = {
-  Unpaid: 'text-red-600',
-  PartiallyPaid: 'text-amber-600',
-  Paid: 'text-green-600',
-};
+import { Badge } from '../../components/Badge';
+import { useToast } from '../../components/ToastProvider';
 
 interface ManualLine {
   description: string;
@@ -17,11 +14,11 @@ interface ManualLine {
 export function BillingPage() {
   const { hasRole } = useAuth();
   const canManage = hasRole('Administrator', 'Accountant');
+  const toast = useToast();
 
   const [invoices, setInvoices] = useState<InvoiceDto[]>([]);
   const [patients, setPatients] = useState<PatientDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [showGenerate, setShowGenerate] = useState(false);
   const [generatePatientId, setGeneratePatientId] = useState('');
@@ -46,7 +43,6 @@ export function BillingPage() {
     setShowGenerate(true);
     setGeneratePatientId('');
     setManualLines([]);
-    setError(null);
     if (patients.length === 0) {
       const { data } = await apiClient.get<PatientDto[]>('/patients');
       setPatients(data);
@@ -60,7 +56,6 @@ export function BillingPage() {
 
   const onGenerate = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
     try {
       const { data } = await apiClient.post<InvoiceDto>('/invoices', {
         patientId: Number(generatePatientId),
@@ -68,11 +63,12 @@ export function BillingPage() {
           .filter((l) => l.description && l.amount)
           .map((l) => ({ description: l.description, amount: Number(l.amount) })),
       });
+      toast.success('Invoice generated.');
       setShowGenerate(false);
       setSelected(data);
       await load();
     } catch {
-      setError('Failed to generate invoice — there may be no unbilled charges for this patient.');
+      toast.error('Failed to generate invoice — there may be no unbilled charges for this patient.');
     }
   };
 
@@ -86,17 +82,17 @@ export function BillingPage() {
   const onRecordPayment = async (e: FormEvent) => {
     e.preventDefault();
     if (!selected) return;
-    setError(null);
     try {
       const { data } = await apiClient.post<InvoiceDto>(`/invoices/${selected.id}/payments`, {
         amount: Number(paymentAmount),
         method: paymentMethod,
       });
+      toast.success('Payment recorded.');
       setSelected(data);
       setPaymentAmount('');
       await load();
     } catch {
-      setError('Failed to record payment — check the amount does not exceed the outstanding balance.');
+      toast.error('Failed to record payment — check the amount does not exceed the outstanding balance.');
     }
   };
 
@@ -109,17 +105,16 @@ export function BillingPage() {
         {canManage && (
           <button
             onClick={() => void startGenerate()}
-            className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
           >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
             Generate Invoice
           </button>
         )}
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-
       {showGenerate && (
-        <form onSubmit={onGenerate} className="mb-6 max-w-md rounded border border-slate-200 bg-white p-4">
+        <form onSubmit={onGenerate} className="mb-6 max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Generate Invoice</h2>
           <p className="mb-3 text-xs text-slate-500">
             Automatically aggregates unbilled consultation, lab, and dispensed pharmacy charges for the selected patient.
@@ -130,7 +125,7 @@ export function BillingPage() {
             required
             value={generatePatientId}
             onChange={(e) => setGeneratePatientId(e.target.value)}
-            className="mb-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
           >
             <option value="" disabled>
               Select…
@@ -144,7 +139,7 @@ export function BillingPage() {
 
           <div className="mb-2 flex items-center justify-between">
             <label className="block text-sm font-medium text-slate-600">Additional charges (e.g. admission)</label>
-            <button type="button" onClick={addManualLine} className="text-sm text-slate-600 hover:underline">
+            <button type="button" onClick={addManualLine} className="text-sm text-teal-600 hover:text-teal-700 hover:underline">
               + Add
             </button>
           </div>
@@ -154,7 +149,7 @@ export function BillingPage() {
                 placeholder="Description"
                 value={line.description}
                 onChange={(e) => updateManualLine(i, { description: e.target.value })}
-                className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
               />
               <input
                 type="number"
@@ -163,22 +158,22 @@ export function BillingPage() {
                 placeholder="Amount"
                 value={line.amount}
                 onChange={(e) => updateManualLine(i, { amount: e.target.value })}
-                className="w-28 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
               />
-              <button type="button" onClick={() => removeManualLine(i)} className="text-sm text-red-600">
+              <button type="button" onClick={() => removeManualLine(i)} className="text-sm text-rose-600 hover:text-rose-700">
                 ×
               </button>
             </div>
           ))}
 
           <div className="mt-3 flex gap-2">
-            <button type="submit" className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
+            <button type="submit" className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700">
               Generate
             </button>
             <button
               type="button"
               onClick={() => setShowGenerate(false)}
-              className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -189,9 +184,14 @@ export function BillingPage() {
       <div className="flex gap-6">
         {loading ? (
           <p className="text-sm text-slate-500">Loading…</p>
+        ) : invoices.length === 0 ? (
+          <div className="flex w-full max-w-2xl flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center">
+            <Receipt className="h-8 w-8 text-slate-300" strokeWidth={1.5} />
+            <p className="text-sm text-slate-500">No invoices yet.</p>
+          </div>
         ) : (
-          <table className="w-full max-w-2xl border-collapse overflow-hidden rounded border border-slate-200 bg-white text-sm">
-            <thead className="bg-slate-100 text-left text-slate-600">
+          <table className="w-full max-w-2xl border-collapse overflow-hidden rounded-xl border border-slate-200 bg-white text-sm shadow-sm">
+            <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <th className="px-3 py-2">Patient</th>
                 <th className="px-3 py-2">Date</th>
@@ -202,31 +202,26 @@ export function BillingPage() {
             </thead>
             <tbody>
               {invoices.map((inv) => (
-                <tr key={inv.id} className="border-t border-slate-100">
+                <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-2 font-medium text-slate-800">{inv.patientName}</td>
                   <td className="px-3 py-2 text-slate-500">{new Date(inv.createdAtUtc).toLocaleDateString()}</td>
                   <td className="px-3 py-2 text-slate-500">{inv.totalAmount.toFixed(2)}</td>
-                  <td className={`px-3 py-2 font-medium ${statusColor[inv.status]}`}>{inv.status}</td>
+                  <td className="px-3 py-2">
+                    <Badge status={inv.status} />
+                  </td>
                   <td className="px-3 py-2 text-right">
-                    <button onClick={() => void viewInvoice(inv)} className="text-slate-600 hover:underline">
+                    <button onClick={() => void viewInvoice(inv)} className="text-teal-600 hover:text-teal-700 hover:underline">
                       View
                     </button>
                   </td>
                 </tr>
               ))}
-              {invoices.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
-                    No invoices yet.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         )}
 
         {selected && (
-          <div className="w-full max-w-md rounded border border-slate-200 bg-white p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">Invoice #{selected.id} — {selected.patientName}</h2>
               <button onClick={() => setSelected(null)} className="text-sm text-slate-500 hover:underline">
@@ -254,7 +249,7 @@ export function BillingPage() {
                 <span>Paid</span>
                 <span>{selected.amountPaid.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-medium text-red-600">
+              <div className="flex justify-between font-medium text-rose-600">
                 <span>Outstanding</span>
                 <span>{outstanding.toFixed(2)}</span>
               </div>
@@ -284,18 +279,18 @@ export function BillingPage() {
                   placeholder="Amount"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-24 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
                 />
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
                 >
                   <option>Cash</option>
                   <option>Card</option>
                   <option>Bank Transfer</option>
                 </select>
-                <button type="submit" className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
+                <button type="submit" className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700">
                   Record Payment
                 </button>
               </form>

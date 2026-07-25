@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './app/AuthContext';
 import { Layout } from './app/Layout';
+import { ToastProvider } from './components/ToastProvider';
+import { ConfirmProvider } from './components/ConfirmProvider';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { LoginPage } from './features/auth/LoginPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
@@ -19,6 +21,8 @@ import { ReportsPage } from './features/reports/ReportsPage';
 function App() {
   return (
     <BrowserRouter>
+      <ToastProvider>
+      <ConfirmProvider>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -54,6 +58,8 @@ function App() {
           </Route>
         </Routes>
       </AuthProvider>
+      </ConfirmProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }
