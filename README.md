@@ -86,7 +86,7 @@ A full-stack **Hospital Management System** designed to streamline hospital oper
 * 💻 C# / .NET 9
 * 🌐 ASP.NET Core Web API
 * 🔒 ASP.NET Core Identity + JWT Bearer Authentication
-* 🗄️ SQL Server / LocalDB
+* 🗄️ SQL Server 
 * 🔗 Entity Framework Core
 * 🔑 Access and Refresh Token Authentication
 
@@ -150,7 +150,7 @@ Each Application and Infrastructure layer is organized by business module, inclu
 
 * .NET 9 SDK
 * Node.js 18+ recommended
-* SQL Server / LocalDB
+* SQL Server 
 
 ### Backend Setup
 
